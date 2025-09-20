@@ -1,0 +1,73 @@
+name: Build Ghostty
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runner: [ ubuntu-latest, ubuntu-24.04-arm]
+    
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+    - name: Checkout Ghostty repository
+      uses: actions/checkout@v5
+      with:
+        repository: ghostty-org/ghostty
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          gettext \
+          git \
+          libadwaita-1-dev \
+          libfontconfig1-dev \
+          libfreetype6-dev \
+          libgl1-mesa-dev \
+          libgtk-4-dev \
+          libpng-dev \
+          libx11-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxinerama-dev \
+          libxkbcommon-dev \
+          libxml2-utils \
+          libxrandr-dev \
+          meson \
+          pkg-config
+
+    - name: Install Blueprint Compiler
+      run: |
+        curl -L -o blueprint-compiler-0.18.0.tar.gz https://gitlab.gnome.org/GNOME/blueprint-compiler/-/archive/0.18.0/blueprint-compiler-0.18.0.tar.gz
+        tar -xf blueprint-compiler-0.18.0.tar.gz
+        cd blueprint-compiler-0.18.0
+        meson setup builddir
+        meson compile -C builddir
+        sudo meson install -C builddir
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v2
+      with:
+        version: 0.14.1
+    
+    - name: Build Ghostty
+      run: |
+        zig build -fno-sys=gtk4-layer-shell 
+    
+    - name: Run tests
+      run: |
+        zig build -fno-sys=gtk4-layer-shell test
+    
+    - name: Verify binary
+      run: |
+        file zig-out/bin/ghostty
+        ldd zig-out/bin/ghostty || true
